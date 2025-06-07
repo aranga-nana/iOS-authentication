@@ -1,0 +1,43 @@
+{
+  "name": "ios-auth-lambda-functions",
+  "version": "1.0.0",
+  "description": "AWS Lambda functions for iOS authentication system with Firebase and DynamoDB",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "build": "npm run lint && npm run test",
+    "deploy": "serverless deploy",
+    "local": "serverless offline"
+  },
+  "dependencies": {
+    "aws-sdk": "^2.1497.0",
+    "firebase-admin": "^11.11.1",
+    "jsonwebtoken": "^9.0.2",
+    "crypto": "^1.0.1",
+    "uuid": "^9.0.1",
+    "validator": "^13.11.0",
+    "bcryptjs": "^2.4.3",
+    "axios": "^1.6.0",
+    "winston": "^3.11.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "eslint": "^8.54.0",
+    "prettier": "^3.1.0",
+    "serverless": "^3.38.0",
+    "serverless-offline": "^13.3.0",
+    "@types/jest": "^29.5.8",
+    "aws-sdk-mock": "^5.8.0"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "collectCoverage": true,
+    "coverageDirectory": "coverage",
+    "coverageReporters": ["text", "lcov", "html"]
+  },
+  "engines": {
+    "node": ">=18.x"
+  }
+}

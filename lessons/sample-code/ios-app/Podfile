@@ -1,0 +1,51 @@
+# Podfile for iOS Authentication App
+
+platform :ios, '15.0'
+use_frameworks!
+
+target 'iOS-Auth-App' do
+  # Firebase
+  pod 'Firebase/Auth'
+  pod 'Firebase/Firestore'
+  pod 'Firebase/Analytics'
+  pod 'Firebase/Crashlytics'
+  pod 'Firebase/Performance'
+  pod 'Firebase/AppCheck'
+  
+  # Google Sign-In
+  pod 'GoogleSignIn'
+  
+  # Networking
+  pod 'Alamofire', '~> 5.8'
+  
+  # Security
+  pod 'CryptoSwift', '~> 1.8'
+  pod 'KeychainAccess', '~> 4.2'
+  
+  # UI/UX
+  pod 'Lottie', '~> 4.3'
+  pod 'SDWebImageSwiftUI', '~> 2.2'
+  
+  # Utilities
+  pod 'SwiftyJSON', '~> 5.0'
+  
+  target 'iOS-Auth-AppTests' do
+    inherit! :search_paths
+    # Testing pods
+    pod 'Firebase/Auth'
+    pod 'OHHTTPStubs/Swift'
+  end
+
+  target 'iOS-Auth-AppUITests' do
+    # UI testing pods if needed
+  end
+end
+
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    target.build_configurations.each do |config|
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+      config.build_settings['ENABLE_BITCODE'] = 'NO'
+    end
+  end
+end

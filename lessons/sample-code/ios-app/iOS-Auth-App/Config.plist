@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- API Configuration -->
+    <key>APIBaseURL</key>
+    <string>https://your-api-gateway-url.execute-api.region.amazonaws.com/prod</string>
+    
+    <key>APITimeout</key>
+    <integer>30</integer>
+    
+    <!-- Firebase Configuration -->
+    <key>FirebaseProjectID</key>
+    <string>your-firebase-project-id</string>
+    
+    <key>FirebaseAPIKey</key>
+    <string>your-firebase-api-key</string>
+    
+    <!-- Security Configuration -->
+    <key>EnableCertificatePinning</key>
+    <true/>
+    
+    <key>CertificatePins</key>
+    <array>
+        <string>your-certificate-pin-1</string>
+        <string>your-certificate-pin-2</string>
+    </array>
+    
+    <!-- Biometric Configuration -->
+    <key>BiometricAuthEnabled</key>
+    <true/>
+    
+    <key>BiometricPromptMessage</key>
+    <string>Use biometric authentication to access your account</string>
+    
+    <!-- App Settings -->
+    <key>AppName</key>
+    <string>iOS Auth App</string>
+    
+    <key>AppVersion</key>
+    <string>1.0.0</string>
+    
+    <key>MinimumAppVersion</key>
+    <string>1.0.0</string>
+    
+    <!-- Feature Flags -->
+    <key>EnableSocialLogin</key>
+    <true/>
+    
+    <key>EnableGoogleSignIn</key>
+    <true/>
+    
+    <key>EnableAppleSignIn</key>
+    <true/>
+    
+    <key>EnablePasswordReset</key>
+    <true/>
+    
+    <key>EnableProfilePhotoUpload</key>
+    <true/>
+    
+    <!-- Logging Configuration -->
+    <key>LogLevel</key>
+    <string>DEBUG</string>
+    
+    <key>EnableAnalytics</key>
+    <true/>
+    
+    <key>EnableCrashReporting</key>
+    <true/>
+    
+    <!-- Cache Configuration -->
+    <key>CacheTimeout</key>
+    <integer>300</integer>
+    
+    <key>MaxCacheSize</key>
+    <integer>100</integer>
+    
+    <!-- Rate Limiting -->
+    <key>MaxLoginAttempts</key>
+    <integer>5</integer>
+    
+    <key>LoginCooldownPeriod</key>
+    <integer>300</integer>
+    
+    <!-- UI Configuration -->
+    <key>ThemeColor</key>
+    <string>#007AFF</string>
+    
+    <key>EnableDarkMode</key>
+    <true/>
+    
+    <key>AnimationDuration</key>
+    <real>0.3</real>
+    
+    <!-- Validation Rules -->
+    <key>MinPasswordLength</key>
+    <integer>8</integer>
+    
+    <key>MaxPasswordLength</key>
+    <integer>128</integer>
+    
+    <key>RequirePasswordComplexity</key>
+    <true/>
+    
+    <key>MaxNameLength</key>
+    <integer>50</integer>
+    
+    <!-- Network Configuration -->
+    <key>RetryAttempts</key>
+    <integer>3</integer>
+    
+    <key>RetryDelay</key>
+    <real>1.0</real>
+    
+    <key>ConnectionTimeout</key>
+    <integer>10</integer>
+    
+    <!-- Development Settings -->
+    <key>EnableDebugMode</key>
+    <true/>
+    
+    <key>ShowNetworkLogs</key>
+    <true/>
+    
+    <key>MockAPIResponses</key>
+    <false/>
+    
+    <!-- Accessibility -->
+    <key>EnableAccessibility</key>
+    <true/>
+    
+    <key>VoiceOverEnabled</key>
+    <true/>
+    
+    <!-- Privacy Settings -->
+    <key>DataRetentionDays</key>
+    <integer>365</integer>
+    
+    <key>EnableDataEncryption</key>
+    <true/>
+    
+    <key>RequirePrivacyConsent</key>
+    <true/>
+</dict>
+</plist>
