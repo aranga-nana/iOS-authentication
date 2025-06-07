@@ -1,30 +1,62 @@
 # Terraform Infrastructure for iOS Authentication System
 
-This directory contains the Terraform configuration for deploying the AWS infrastructure required for the iOS authentication system.
+This directory contains the Terraform configuration for deploying the supporting AWS infrastructure for the iOS authentication system. The core Lambda functions and API Gateway are deployed using AWS SAM (see `../aws-lambda/` directory), while this Terraform configuration manages the broader infrastructure components.
 
 ## Architecture Overview
 
 ```
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   CloudFront    │───▶│   API Gateway    │───▶│   Lambda Fns    │
+│   CloudFront    │───▶│   API Gateway    │───▶│   Lambda Fns    │ ← SAM Managed
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+        ↑                        ↑                         │
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│      WAF        │    │  Custom Domain   │    │   DynamoDB      │ ← SAM Managed
 └─────────────────┘    └──────────────────┘    └─────────────────┘
                                                          │
                                ┌─────────────────────────┼─────────────────────────┐
                                │                         │                         │
                     ┌──────────▼──────────┐   ┌─────────▼─────────┐   ┌─────────▼─────────┐
-                    │     DynamoDB        │   │   CloudWatch      │   │      IAM          │
-                    │                     │   │   (Monitoring)    │   │    (Security)     │
+                    │   Secrets Manager   │   │   CloudWatch      │   │      IAM          │
+                    │  (Firebase Keys)    │   │   Enhanced        │   │   Additional      │
                     └─────────────────────┘   └───────────────────┘   └───────────────────┘
 ```
 
-## Components
+## Terraform vs SAM Division
 
-### Core Infrastructure
-- **API Gateway**: RESTful API endpoints with throttling and monitoring
-- **Lambda Functions**: Serverless compute for authentication logic
-- **DynamoDB**: NoSQL database for user data storage
-- **CloudWatch**: Monitoring, logging, and alerting
-- **IAM**: Roles and policies for security
+### SAM Manages (../aws-lambda/)
+- **Lambda Functions**: Authentication business logic
+- **API Gateway**: Core REST API endpoints
+- **DynamoDB**: User data tables with indexes
+- **Basic CloudWatch**: Function logs and metrics
+- **Basic IAM**: Function execution roles
+
+### Terraform Manages (this directory)
+- **CloudFront Distribution**: CDN and DDoS protection
+- **WAF**: Web Application Firewall rules
+- **Custom Domain**: API Gateway custom domain setup
+- **Certificate Manager**: SSL/TLS certificates
+- **Secrets Manager**: Secure Firebase credentials storage
+- **Enhanced CloudWatch**: Custom dashboards and alarms
+- **Cross-Environment Resources**: Shared infrastructure
+
+## Integration with SAM
+
+This Terraform configuration is designed to complement the SAM deployment:
+
+1. **Deploy SAM Stack First**: The core Lambda/API infrastructure
+2. **Deploy Terraform**: The supporting infrastructure that references SAM outputs
+
+```bash
+# 1. Deploy SAM stack
+cd ../aws-lambda
+sam deploy --config-env dev
+
+# 2. Deploy Terraform (references SAM outputs)
+cd ../terraform
+terraform apply
+```
+
+## Components
 
 ### Security Features
 - **WAF**: Web Application Firewall for API protection

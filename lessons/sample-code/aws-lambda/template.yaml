@@ -1,0 +1,289 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  iOS Authentication Backend
+  
+  SAM Template for iOS authentication system with Firebase and DynamoDB
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 512
+    Runtime: nodejs18.x
+    Architectures:
+      - x86_64
+    Environment:
+      Variables:
+        STAGE: !Ref Stage
+        USERS_TABLE: !Ref UsersTable
+        JWT_SECRET: !Ref JWTSecret
+        JWT_EXPIRES_IN: !Ref JWTExpiresIn
+        FIREBASE_PROJECT_ID: !Ref FirebaseProjectId
+        FIREBASE_CLIENT_EMAIL: !Ref FirebaseClientEmail
+        FIREBASE_PRIVATE_KEY: !Ref FirebasePrivateKey
+        LOG_LEVEL: !Ref LogLevel
+    Tracing: Active
+  Api:
+    TracingConfig:
+      TracingEnabled: true
+    Cors:
+      AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+      AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+      AllowOrigin: "'*'"
+
+Parameters:
+  Stage:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Description: Environment stage
+  
+  JWTSecret:
+    Type: String
+    NoEcho: true
+    Description: JWT secret key for token signing
+    MinLength: 32
+  
+  JWTExpiresIn:
+    Type: String
+    Default: '24h'
+    Description: JWT token expiration time
+  
+  FirebaseProjectId:
+    Type: String
+    Description: Firebase project ID
+  
+  FirebaseClientEmail:
+    Type: String
+    Description: Firebase service account client email
+  
+  FirebasePrivateKey:
+    Type: String
+    NoEcho: true
+    Description: Firebase service account private key
+  
+  LogLevel:
+    Type: String
+    Default: info
+    AllowedValues:
+      - error
+      - warn
+      - info
+      - debug
+    Description: Application log level
+
+Resources:
+  # API Gateway
+  AuthApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Stage
+      Description: iOS Authentication API
+      EndpointConfiguration:
+        Type: REGIONAL
+      AccessLogSetting:
+        DestinationArn: !GetAtt ApiGatewayLogGroup.Arn
+        Format: >
+          {
+            "requestId": "$context.requestId",
+            "extendedRequestId": "$context.extendedRequestId",
+            "ip": "$context.identity.sourceIp",
+            "caller": "$context.identity.caller",
+            "user": "$context.identity.user",
+            "requestTime": "$context.requestTime",
+            "httpMethod": "$context.httpMethod",
+            "resourcePath": "$context.resourcePath",
+            "status": "$context.status",
+            "protocol": "$context.protocol",
+            "responseLength": "$context.responseLength"
+          }
+      MethodSettings:
+        - ResourcePath: '/*'
+          HttpMethod: '*'
+          LoggingLevel: INFO
+          DataTraceEnabled: true
+          MetricsEnabled: true
+
+  # Lambda Functions
+  RegisterUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: userFunctions.registerUser
+      Description: Register new user account
+      ReservedConcurrencyLimit: 10
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UsersTable
+        - CloudWatchLogsFullAccess
+      Events:
+        RegisterUser:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AuthApi
+            Path: /auth/register
+            Method: post
+
+  LoginUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: userFunctions.loginUser
+      Description: User login authentication
+      ReservedConcurrencyLimit: 20
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref UsersTable
+        - CloudWatchLogsFullAccess
+      Events:
+        LoginUser:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AuthApi
+            Path: /auth/login
+            Method: post
+
+  GetUserProfileFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: userFunctions.getUserProfile
+      Description: Get user profile information
+      ReservedConcurrencyLimit: 5
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref UsersTable
+        - CloudWatchLogsFullAccess
+      Events:
+        GetUserProfile:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AuthApi
+            Path: /users/{userId}
+            Method: get
+
+  UpdateUserProfileFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: userFunctions.updateUserProfile
+      Description: Update user profile information
+      ReservedConcurrencyLimit: 5
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UsersTable
+        - CloudWatchLogsFullAccess
+      Events:
+        UpdateUserProfile:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AuthApi
+            Path: /users/{userId}
+            Method: put
+
+  DeleteUserAccountFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: userFunctions.deleteUserAccount
+      Description: Delete user account
+      ReservedConcurrencyLimit: 2
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UsersTable
+        - CloudWatchLogsFullAccess
+      Events:
+        DeleteUserAccount:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AuthApi
+            Path: /users/{userId}
+            Method: delete
+
+  # DynamoDB Table
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${AWS::StackName}-users-${Stage}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: email
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: EmailIndex
+          KeySchema:
+            - AttributeName: email
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      Tags:
+        - Key: Service
+          Value: !Sub '${AWS::StackName}'
+        - Key: Stage
+          Value: !Ref Stage
+
+  # CloudWatch Log Group for API Gateway
+  ApiGatewayLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/apigateway/${AWS::StackName}-${Stage}'
+      RetentionInDays: 30
+
+  # Application Insights for monitoring
+  ApplicationResourceGroup:
+    Type: AWS::ResourceGroups::Group
+    Properties:
+      Name: !Sub 'ApplicationInsights-SAM-${AWS::StackName}'
+      ResourceQuery:
+        Type: CLOUDFORMATION_STACK_1_0
+
+  ApplicationInsightsApplication:
+    Type: AWS::ApplicationInsights::Application
+    Properties:
+      ResourceGroupName: !Ref ApplicationResourceGroup
+      AutoConfigurationEnabled: 'true'
+
+Outputs:
+  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
+  # Find out more about other implicit resources you can reference within SAM
+  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
+  AuthApi:
+    Description: "API Gateway endpoint URL for authentication API"
+    Value: !Sub "https://${AuthApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/"
+  
+  AuthApiId:
+    Description: "API Gateway ID"
+    Value: !Ref AuthApi
+    Export:
+      Name: !Sub "${AWS::StackName}-AuthApiId"
+  
+  UsersTableName:
+    Description: "DynamoDB Users table name"
+    Value: !Ref UsersTable
+    Export:
+      Name: !Sub "${AWS::StackName}-UsersTableName"
+  
+  UsersTableArn:
+    Description: "DynamoDB Users table ARN"
+    Value: !GetAtt UsersTable.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-UsersTableArn"
+  
+  Region:
+    Description: "AWS Region"
+    Value: !Ref AWS::Region

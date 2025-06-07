@@ -1,0 +1,46 @@
+version = 0.1
+
+[default]
+[default.global.parameters]
+stack_name = "ios-auth-backend"
+
+[default.build.parameters]
+cached = true
+parallel = true
+
+[default.validate.parameters]
+lint = true
+
+[default.deploy.parameters]
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+resolve_s3 = true
+s3_prefix = "ios-auth-backend"
+region = "us-east-1"
+image_repositories = []
+
+[dev]
+[dev.deploy.parameters]
+stack_name = "ios-auth-backend-dev"
+parameter_overrides = [
+    "Stage=dev",
+    "LogLevel=debug"
+]
+
+[staging]
+[staging.deploy.parameters]
+stack_name = "ios-auth-backend-staging"
+parameter_overrides = [
+    "Stage=staging",
+    "LogLevel=info"
+]
+
+[prod]
+[prod.deploy.parameters]
+stack_name = "ios-auth-backend-prod"
+parameter_overrides = [
+    "Stage=prod",
+    "LogLevel=warn"
+]
+confirm_changeset = true
+fail_on_empty_changeset = false

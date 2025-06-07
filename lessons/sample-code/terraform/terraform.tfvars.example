@@ -1,54 +1,46 @@
 # Example Terraform Variables Configuration
 # Copy this file to terraform.tfvars and update with your values
+# This configuration manages supporting infrastructure for SAM-deployed Lambda functions
 
 # Project Configuration
 project_name = "ios-auth"
 environment  = "dev"  # dev, staging, or prod
 owner       = "your-team-name"
 
+# SAM Integration
+sam_stack_name = "ios-auth-backend-dev"  # Must match your SAM stack name
+
 # AWS Configuration
 aws_region = "us-east-1"
 
 # Firebase Configuration (Get these from Firebase Console > Project Settings > Service Accounts)
+# These will be stored securely in AWS Secrets Manager
 firebase_project_id   = "your-firebase-project-id"
 firebase_client_email = "firebase-adminsdk-xxxxx@your-project.iam.gserviceaccount.com"
 # Note: Replace \n with actual newlines in the private key
 firebase_private_key  = "-----BEGIN PRIVATE KEY-----\nYour-Firebase-Private-Key-Here\n-----END PRIVATE KEY-----"
 
-# JWT Configuration
-jwt_expires_in = "24h"
-
-# API Gateway Configuration
-api_throttle_rate_limit  = 100   # requests per second
-api_throttle_burst_limit = 200   # burst capacity
-
-# Optional: Custom Domain Configuration
-# api_domain_name     = "api.yourdomain.com"
-# api_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"
-# api_hosted_zone_id  = "Z1D633PJN98FT9"
-
 # Monitoring Configuration
-alarm_email        = "alerts@yourdomain.com"
-log_retention_days = 30
-log_level         = "info"  # error, warn, info, debug
+alert_email = "alerts@yourdomain.com"
 
-# Security Configuration
-enable_waf                = true
-enable_rate_limiting      = true
-waf_rate_limit_requests   = 2000  # per 5 minutes
-enable_geo_blocking       = false
-blocked_countries         = []    # ["CN", "RU"] for example
+# Optional: Custom Domain Configuration for CloudFront
+# domain_name     = "api.yourdomain.com"
+# certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012"
 
-# DynamoDB Configuration
-dynamodb_billing_mode           = "PAY_PER_REQUEST"  # or "PROVISIONED"
-enable_point_in_time_recovery   = true
-enable_deletion_protection      = false  # set to true for production
+# WAF Configuration
+waf_rate_limit_requests = 2000  # per 5 minutes
+enable_geo_blocking     = false
+blocked_countries       = []    # ["CN", "RU"] for example
 
-# Lambda Configuration
-lambda_runtime             = "nodejs18.x"
-lambda_timeout            = 30     # seconds
-lambda_memory_size        = 512    # MB
-lambda_reserved_concurrency = 10
+# CloudFront Configuration
+cloudfront_price_class = "PriceClass_100"  # PriceClass_All, PriceClass_200, PriceClass_100
+
+# Tags
+additional_tags = {
+  Department = "Engineering"
+  CostCenter = "12345"
+  Compliance = "SOC2"
+}
 
 # Backup Configuration
 enable_automated_backups = true

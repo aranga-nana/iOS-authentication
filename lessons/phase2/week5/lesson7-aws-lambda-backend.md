@@ -1,155 +1,1141 @@
-# Lesson 7: AWS Lambda Backend Setup
+# Lesson 7: AWS Lambda Backend with SAM
 **Phase 2, Week 5** | **Duration:** 8-10 hours | **Difficulty:** Advanced
 
 **Prerequisites**: Basic AWS knowledge, Firebase Authentication, completed Phase 2 Week 1-4 lessons
 
 ## 🎯 Learning Objectives
-- Set up AWS Lambda functions for authentication backend
-- Create API Gateway endpoints for iOS app communication
-- Implement DynamoDB for user data storage
-- Configure Lambda environment variables and permissions
-- Understand serverless architecture patterns
+- Set up AWS Lambda functions using AWS SAM (Serverless Application Model)
+- Create API Gateway endpoints with SAM templates
+- Implement DynamoDB for user data storage using Infrastructure as Code
+- Configure Lambda environment variables and permissions declaratively
+- Understand serverless architecture patterns and SAM best practices
 
 ---
 
 ## 📚 Theory Overview
 
-### What is AWS Lambda?
-AWS Lambda is a serverless compute service that runs code in response to events without managing servers. Perfect for:
-- **Authentication processing**
-- **User profile management**
-- **Token validation**
-- **Business logic execution**
+### What is AWS SAM?
+AWS SAM (Serverless Application Model) is an open-source framework for building serverless applications on AWS. It provides:
+- **Infrastructure as Code**: Define your entire serverless application in YAML/JSON
+- **Local Development**: Test Lambda functions locally before deployment
+- **Built-in Best Practices**: Security, monitoring, and performance optimizations
+- **Simplified Syntax**: Abstracts complex CloudFormation templates
 
 ### Architecture Overview:
 ```
 iOS App → API Gateway → Lambda Functions → DynamoDB
+                    ↓                   ↓
+               CloudWatch Logs    Application Insights
                     ↓
-               CloudWatch Logs
+               X-Ray Tracing
 ```
 
+### SAM vs Alternatives:
+| Tool | Use Case | Learning Curve | Features |
+|------|----------|----------------|----------|
+| **AWS SAM** | AWS-native serverless | Medium | Built-in best practices, local testing |
+| Serverless Framework | Multi-cloud | Medium | Plugin ecosystem, mature |
+| CDK | Complex infrastructure | High | Full programming languages |
+| Manual CloudFormation | Enterprise control | High | Maximum flexibility |
+
 ### Key Benefits:
-- **Serverless**: No server management
-- **Auto-scaling**: Handles traffic spikes automatically
-- **Cost-effective**: Pay only for execution time
-- **Integration**: Works seamlessly with other AWS services
+- **Infrastructure as Code**: Version control your entire stack
+- **Local Development**: Debug Lambda functions on your machine
+- **Automatic IAM**: SAM generates minimal required permissions
+- **Built-in Monitoring**: CloudWatch, X-Ray, and Application Insights
 
 ---
 
 ## 🛠 Implementation Guide
 
-### Step 1: AWS Setup and Configuration
+### Step 1: SAM Setup and Installation
 
-#### 1.1 AWS CLI Installation and Configuration
+#### 1.1 Install AWS SAM CLI
 ```bash
-# Install AWS CLI
-curl "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o "AWSCLIV2.pkg"
-sudo installer -pkg AWSCLIV2.pkg -target /
+# macOS (using Homebrew)
+brew install aws-sam-cli
+
+# Windows (using Chocolatey)
+choco install aws-sam-cli
+
+# Linux (using pip)
+pip install aws-sam-cli
+
+# Verify installation
+sam --version
+```
+
+#### 1.2 AWS CLI Configuration
+```bash
+# Install AWS CLI if not already installed
+brew install awscli
 
 # Configure AWS CLI
 aws configure
-# Enter your Access Key ID, Secret Access Key, Region, and Output format
+# Enter your Access Key ID, Secret Access Key, Region (us-east-1), and Output format (json)
+
+# Verify configuration
+aws sts get-caller-identity
 ```
 
-#### 1.2 Create IAM Role for Lambda
+#### 1.3 Create SAM Project Structure
 ```bash
-# Create trust policy for Lambda
-cat > lambda-trust-policy.json << EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Principal": {
-        "Service": "lambda.amazonaws.com"
-      },
-      "Action": "sts:AssumeRole"
-    }
-  ]
-}
-EOF
+# Create project directory
+mkdir ios-auth-backend
+cd ios-auth-backend
 
-# Create IAM role
-aws iam create-role \
-  --role-name AuthLambdaExecutionRole \
-  --assume-role-policy-document file://lambda-trust-policy.json
+# Initialize SAM application
+sam init --runtime nodejs18.x --name ios-auth-backend --app-template hello-world
 
-# Attach basic execution policy
-aws iam attach-role-policy \
-  --role-name AuthLambdaExecutionRole \
-  --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-
-# Attach DynamoDB access policy
-aws iam attach-role-policy \
-  --role-name AuthLambdaExecutionRole \
-  --policy-arn arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess
+# Or use our custom template
+mkdir ios-auth-backend
+cd ios-auth-backend
 ```
 
-### Step 2: DynamoDB Table Setup
+### Step 2: SAM Template Configuration
 
-#### 2.1 Create Users Table
+#### 2.1 Create template.yaml
+```yaml
+# template.yaml - SAM template for iOS Authentication Backend
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: iOS Authentication Backend with Firebase integration
+
+# Global configuration for all functions
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 512
+    Runtime: nodejs18.x
+    Architectures:
+      - x86_64
+    Environment:
+      Variables:
+        STAGE: !Ref Stage
+        USERS_TABLE: !Ref UsersTable
+        JWT_SECRET: !Ref JWTSecret
+        FIREBASE_PROJECT_ID: !Ref FirebaseProjectId
+        FIREBASE_CLIENT_EMAIL: !Ref FirebaseClientEmail
+        FIREBASE_PRIVATE_KEY: !Ref FirebasePrivateKey
+        LOG_LEVEL: !Ref LogLevel
+    Tracing: Active  # Enable X-Ray tracing
+  Api:
+    TracingConfig:
+      TracingEnabled: true
+    Cors:
+      AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+      AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+      AllowOrigin: "'*'"
+
+# Parameters for environment-specific configuration
+Parameters:
+  Stage:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+    Description: Environment stage
+  
+  JWTSecret:
+    Type: String
+    NoEcho: true
+    Description: JWT secret key for token signing
+    MinLength: 32
+  
+  FirebaseProjectId:
+    Type: String
+    Description: Firebase project ID
+  
+  FirebaseClientEmail:
+    Type: String
+    Description: Firebase service account client email
+  
+  FirebasePrivateKey:
+    Type: String
+    NoEcho: true
+    Description: Firebase service account private key
+  
+  LogLevel:
+    Type: String
+    Default: info
+    AllowedValues: [error, warn, info, debug]
+    Description: Application log level
+
+# Resources definition
+Resources:
+  # API Gateway
+  AuthApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Stage
+      Description: iOS Authentication API
+      AccessLogSetting:
+        DestinationArn: !GetAtt ApiGatewayLogGroup.Arn
+      MethodSettings:
+        - ResourcePath: '/*'
+          HttpMethod: '*'
+          LoggingLevel: INFO
+          DataTraceEnabled: true
+          MetricsEnabled: true
+
+  # Lambda Functions
+  RegisterUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: userFunctions.registerUser
+      Description: Register new user account
+      ReservedConcurrencyLimit: 10
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UsersTable
+      Events:
+        RegisterUser:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AuthApi
+            Path: /auth/register
+            Method: post
+
+  LoginUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: userFunctions.loginUser
+      Description: User login authentication
+      ReservedConcurrencyLimit: 20
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref UsersTable
+      Events:
+        LoginUser:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AuthApi
+            Path: /auth/login
+            Method: post
+
+  GetUserProfileFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ./
+      Handler: userFunctions.getUserProfile
+      Description: Get user profile information
+      ReservedConcurrencyLimit: 5
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref UsersTable
+      Events:
+        GetUserProfile:
+          Type: Api
+          Properties:
+            RestApiId: !Ref AuthApi
+            Path: /users/{userId}
+            Method: get
+
+  # DynamoDB Table
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${AWS::StackName}-users-${Stage}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: email
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: EmailIndex
+          KeySchema:
+            - AttributeName: email
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+
+  # CloudWatch Log Group
+  ApiGatewayLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/apigateway/${AWS::StackName}-${Stage}'
+      RetentionInDays: 30
+
+# Outputs
+Outputs:
+  AuthApiEndpoint:
+    Description: "API Gateway endpoint URL"
+    Value: !Sub "https://${AuthApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/"
+  
+  UsersTableName:
+    Description: "DynamoDB Users table name"
+    Value: !Ref UsersTable
+```
+
+### Step 3: Lambda Function Implementation
+
+#### 3.1 Create Package.json for Dependencies
+```json
+{
+  "name": "ios-auth-lambda-functions",
+  "version": "1.0.0",
+  "description": "AWS Lambda functions for iOS authentication system with Firebase and DynamoDB",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "build": "npm run lint && npm run test",
+    "deploy": "sam deploy",
+    "build-sam": "sam build",
+    "local": "sam local start-api",
+    "validate": "sam validate"
+  },
+  "dependencies": {
+    "aws-sdk": "^2.1497.0",
+    "firebase-admin": "^11.11.1",
+    "jsonwebtoken": "^9.0.2",
+    "uuid": "^9.0.1",
+    "validator": "^13.11.0",
+    "winston": "^3.11.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "eslint": "^8.54.0",
+    "prettier": "^3.1.0",
+    "@types/jest": "^29.5.8"
+  }
+}
+```
+
+#### 3.2 Create Environment Variables Template
+```json
+// env.json.example - Environment variables for local development
+{
+  "RegisterUserFunction": {
+    "STAGE": "local",
+    "USERS_TABLE": "ios-auth-backend-users-local",
+    "JWT_SECRET": "your-super-secret-jwt-key-here-minimum-32-characters",
+    "JWT_EXPIRES_IN": "24h",
+    "FIREBASE_PROJECT_ID": "your-firebase-project-id",
+    "FIREBASE_CLIENT_EMAIL": "firebase-service-account@your-project.iam.gserviceaccount.com",
+    "FIREBASE_PRIVATE_KEY": "-----BEGIN PRIVATE KEY-----\nYOUR_FIREBASE_PRIVATE_KEY_HERE\n-----END PRIVATE KEY-----",
+    "LOG_LEVEL": "debug"
+  },
+  "LoginUserFunction": {
+    "STAGE": "local",
+    "USERS_TABLE": "ios-auth-backend-users-local",
+    "JWT_SECRET": "your-super-secret-jwt-key-here-minimum-32-characters",
+    "JWT_EXPIRES_IN": "24h",
+    "FIREBASE_PROJECT_ID": "your-firebase-project-id",
+    "FIREBASE_CLIENT_EMAIL": "firebase-service-account@your-project.iam.gserviceaccount.com",
+    "FIREBASE_PRIVATE_KEY": "-----BEGIN PRIVATE KEY-----\nYOUR_FIREBASE_PRIVATE_KEY_HERE\n-----END PRIVATE KEY-----",
+    "LOG_LEVEL": "debug"
+  }
+}
+```
+
+#### 3.3 Create User Registration Function
 ```javascript
-// users-table-schema.js
+// userFunctions.js
 const AWS = require('aws-sdk');
-const dynamodb = new AWS.DynamoDB();
+const admin = require('firebase-admin');
+const jwt = require('jsonwebtoken');
+const validator = require('validator');
+const winston = require('winston');
+const { v4: uuidv4 } = require('uuid');
 
-const createUsersTable = async () => {
-    const params = {
-        TableName: 'Users',
-        KeySchema: [
-            {
-                AttributeName: 'userId',
-                KeyType: 'HASH' // Partition key
-            }
-        ],
-        AttributeDefinitions: [
-            {
-                AttributeName: 'userId',
-                AttributeType: 'S'
-            },
-            {
-                AttributeName: 'email',
-                AttributeType: 'S'
-            }
-        ],
-        GlobalSecondaryIndexes: [
-            {
-                IndexName: 'EmailIndex',
-                KeySchema: [
-                    {
-                        AttributeName: 'email',
-                        KeyType: 'HASH'
-                    }
-                ],
-                Projection: {
-                    ProjectionType: 'ALL'
-                },
-                BillingMode: 'PAY_PER_REQUEST'
-            }
-        ],
-        BillingMode: 'PAY_PER_REQUEST',
-        Tags: [
-            {
-                Key: 'Environment',
-                Value: 'Development'
-            },
-            {
-                Key: 'Project',
-                Value: 'iOS-Auth'
-            }
-        ]
-    };
-
-    try {
-        const result = await dynamodb.createTable(params).promise();
-        console.log('Users table created successfully:', result);
-    } catch (error) {
-        console.error('Error creating table:', error);
+// Initialize AWS services
+const dynamodb = new AWS.DynamoDB.DocumentClient({
+  region: process.env.AWS_REGION || 'us-east-1',
+  maxRetries: 3,
+  retryDelayOptions: {
+    customBackoff: function(retryCount) {
+      return Math.pow(2, retryCount) * 100;
     }
+  }
+});
+
+// Initialize Firebase Admin SDK
+if (!admin.apps.length) {
+  admin.initializeApp({
+    credential: admin.credential.cert({
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n')
+    })
+  });
+}
+
+// Configure Winston logger
+const logger = winston.createLogger({
+  level: process.env.LOG_LEVEL || 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.errors({ stack: true }),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.Console()
+  ]
+});
+
+// Constants
+const USERS_TABLE = process.env.USERS_TABLE;
+const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
+
+// Utility functions
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token',
+  'Access-Control-Allow-Methods': 'GET,HEAD,OPTIONS,POST,PUT,DELETE',
+  'Content-Type': 'application/json'
 };
 
-// Create table
-createUsersTable();
+const createResponse = (statusCode, body, headers = {}) => ({
+  statusCode,
+  headers: { ...corsHeaders, ...headers },
+  body: JSON.stringify(body)
+});
+
+// Register User Function
+exports.registerUser = async (event) => {
+  try {
+    logger.info('Register user request received', { 
+      requestId: event.requestContext?.requestId 
+    });
+
+    // Parse request body
+    const { idToken, userData } = JSON.parse(event.body);
+
+    // Validate Firebase ID token
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    const { uid, email, name, picture } = decodedToken;
+
+    // Create user record
+    const userId = uuidv4();
+    const timestamp = new Date().toISOString();
+    
+    const userRecord = {
+      userId,
+      firebaseUid: uid,
+      email,
+      displayName: userData?.displayName || name,
+      profilePicture: userData?.profilePicture || picture,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      lastLoginAt: timestamp,
+      isActive: true,
+      preferences: userData?.preferences || {}
+    };
+
+    // Save to DynamoDB
+    await dynamodb.put({
+      TableName: USERS_TABLE,
+      Item: userRecord,
+      ConditionExpression: 'attribute_not_exists(userId)'
+    }).promise();
+
+    // Generate JWT token
+    const jwtToken = jwt.sign(
+      { userId, email, firebaseUid: uid },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
+
+    logger.info('User registered successfully', { userId, email });
+
+    return createResponse(201, {
+      success: true,
+      message: 'User registered successfully',
+      data: {
+        userId,
+        email,
+        displayName: userRecord.displayName,
+        profilePicture: userRecord.profilePicture,
+        token: jwtToken
+      }
+    });
+
+  } catch (error) {
+    logger.error('Registration failed', { error: error.message, stack: error.stack });
+    
+    if (error.code === 'ConditionalCheckFailedException') {
+      return createResponse(409, {
+        error: true,
+        message: 'User already exists'
+      });
+    }
+
+    return createResponse(500, {
+      error: true,
+      message: 'Internal server error'
+    });
+  }
+};
+
+// Login User Function
+exports.loginUser = async (event) => {
+  try {
+    logger.info('Login request received', { 
+      requestId: event.requestContext?.requestId 
+    });
+
+    const { idToken } = JSON.parse(event.body);
+
+    // Validate Firebase ID token
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    const { uid, email } = decodedToken;
+
+    // Find user by Firebase UID
+    const result = await dynamodb.scan({
+      TableName: USERS_TABLE,
+      FilterExpression: 'firebaseUid = :uid',
+      ExpressionAttributeValues: {
+        ':uid': uid
+      }
+    }).promise();
+
+    if (result.Items.length === 0) {
+      return createResponse(404, {
+        error: true,
+        message: 'User not found'
+      });
+    }
+
+    const user = result.Items[0];
+
+    // Update last login timestamp
+    await dynamodb.update({
+      TableName: USERS_TABLE,
+      Key: { userId: user.userId },
+      UpdateExpression: 'SET lastLoginAt = :timestamp',
+      ExpressionAttributeValues: {
+        ':timestamp': new Date().toISOString()
+      }
+    }).promise();
+
+    // Generate JWT token
+    const jwtToken = jwt.sign(
+      { userId: user.userId, email: user.email, firebaseUid: uid },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
+
+    logger.info('User logged in successfully', { userId: user.userId, email });
+
+    return createResponse(200, {
+      success: true,
+      message: 'Login successful',
+      data: {
+        userId: user.userId,
+        email: user.email,
+        displayName: user.displayName,
+        profilePicture: user.profilePicture,
+        token: jwtToken
+      }
+    });
+
+  } catch (error) {
+    logger.error('Login failed', { error: error.message, stack: error.stack });
+    
+    return createResponse(500, {
+      error: true,
+      message: 'Internal server error'
+    });
+  }
+};
+
+// Get User Profile Function
+exports.getUserProfile = async (event) => {
+  try {
+    const { userId } = event.pathParameters;
+    
+    // Get user from DynamoDB
+    const result = await dynamodb.get({
+      TableName: USERS_TABLE,
+      Key: { userId }
+    }).promise();
+
+    if (!result.Item) {
+      return createResponse(404, {
+        error: true,
+        message: 'User not found'
+      });
+    }
+
+    const user = result.Item;
+    
+    return createResponse(200, {
+      success: true,
+      data: {
+        userId: user.userId,
+        email: user.email,
+        displayName: user.displayName,
+        profilePicture: user.profilePicture,
+        preferences: user.preferences,
+        createdAt: user.createdAt,
+        lastLoginAt: user.lastLoginAt
+      }
+    });
+
+  } catch (error) {
+    logger.error('Get profile failed', { error: error.message, stack: error.stack });
+    
+    return createResponse(500, {
+      error: true,
+      message: 'Internal server error'
+    });
+  }
+};
+```
+
+### Step 4: SAM Configuration and Deployment
+
+#### 4.1 Create SAM Configuration File
+```toml
+# samconfig.toml
+version = 0.1
+
+[default]
+[default.global.parameters]
+stack_name = "ios-auth-backend"
+
+[default.build.parameters]
+cached = true
+parallel = true
+
+[default.validate.parameters]
+lint = true
+
+[default.deploy.parameters]
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+resolve_s3 = true
+s3_prefix = "ios-auth-backend"
+region = "us-east-1"
+
+[dev]
+[dev.deploy.parameters]
+stack_name = "ios-auth-backend-dev"
+parameter_overrides = [
+    "Stage=dev",
+    "LogLevel=debug"
+]
+
+[staging]
+[staging.deploy.parameters]
+stack_name = "ios-auth-backend-staging"
+parameter_overrides = [
+    "Stage=staging",
+    "LogLevel=info"
+]
+
+[prod]
+[prod.deploy.parameters]
+stack_name = "ios-auth-backend-prod"
+parameter_overrides = [
+    "Stage=prod",
+    "LogLevel=warn"
+]
+```
+
+#### 4.2 Local Development and Testing
+```bash
+# Install dependencies
+npm install
+
+# Validate SAM template
+sam validate
+
+# Build the application
+sam build
+
+# Start local API Gateway
+sam local start-api --env-vars env.json
+
+# Test specific function locally
+sam local invoke RegisterUserFunction --event events/register-event.json
+
+# Generate sample events for testing
+sam local generate-event apigateway aws-proxy --path /auth/register --method POST
+```
+
+#### 4.3 Create Test Events
+```json
+// events/register-event.json
+{
+  "httpMethod": "POST",
+  "path": "/auth/register",
+  "headers": {
+    "Content-Type": "application/json"
+  },
+  "body": "{\"idToken\":\"your-firebase-id-token\",\"userData\":{\"displayName\":\"John Doe\",\"preferences\":{\"notifications\":true}}}"
+}
+```
+
+#### 4.4 Deploy to AWS
+```bash
+# Deploy to development environment
+sam deploy --config-env dev \
+  --parameter-overrides \
+    JWTSecret="your-super-secret-jwt-key-minimum-32-characters" \
+    FirebaseProjectId="your-firebase-project-id" \
+    FirebaseClientEmail="your-service-account@project.iam.gserviceaccount.com" \
+    FirebasePrivateKey="-----BEGIN PRIVATE KEY-----\nYOUR_KEY_HERE\n-----END PRIVATE KEY-----"
+
+# Deploy to production
+sam deploy --config-env prod \
+  --parameter-overrides \
+    JWTSecret="your-production-jwt-secret" \
+    FirebaseProjectId="your-firebase-project-id" \
+    FirebaseClientEmail="your-service-account@project.iam.gserviceaccount.com" \
+    FirebasePrivateKey="-----BEGIN PRIVATE KEY-----\nYOUR_KEY_HERE\n-----END PRIVATE KEY-----"
+```
+
+### Step 5: Testing and Monitoring
+
+#### 5.1 Unit Testing with Jest
+```javascript
+// userFunctions.test.js
+const AWS = require('aws-sdk-mock');
+const { registerUser, loginUser, getUserProfile } = require('./userFunctions');
+
+// Mock AWS services
+AWS.mock('DynamoDB.DocumentClient', 'put', (params, callback) => {
+  callback(null, { ConsumedCapacity: { TableName: 'test-table' } });
+});
+
+AWS.mock('DynamoDB.DocumentClient', 'scan', (params, callback) => {
+  callback(null, {
+    Items: [{
+      userId: 'test-user-id',
+      email: 'test@example.com',
+      firebaseUid: 'test-firebase-uid',
+      displayName: 'Test User'
+    }]
+  });
+});
+
+describe('Lambda Functions', () => {
+  beforeEach(() => {
+    process.env.USERS_TABLE = 'test-users-table';
+    process.env.JWT_SECRET = 'test-secret-key-minimum-32-characters';
+    process.env.FIREBASE_PROJECT_ID = 'test-project';
+    process.env.FIREBASE_CLIENT_EMAIL = 'test@test.iam.gserviceaccount.com';
+    process.env.FIREBASE_PRIVATE_KEY = '-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----';
+  });
+
+  describe('registerUser', () => {
+    test('should register a new user successfully', async () => {
+      const event = {
+        body: JSON.stringify({
+          idToken: 'valid-test-token',
+          userData: {
+            displayName: 'Test User',
+            preferences: { notifications: true }
+          }
+        }),
+        requestContext: { requestId: 'test-request-id' }
+      };
+
+      const result = await registerUser(event);
+      const body = JSON.parse(result.body);
+
+      expect(result.statusCode).toBe(201);
+      expect(body.success).toBe(true);
+      expect(body.data).toHaveProperty('userId');
+      expect(body.data).toHaveProperty('token');
+    });
+
+    test('should handle invalid request body', async () => {
+      const event = {
+        body: JSON.stringify({}),
+        requestContext: { requestId: 'test-request-id' }
+      };
+
+      const result = await registerUser(event);
+      const body = JSON.parse(result.body);
+
+      expect(result.statusCode).toBe(500);
+      expect(body.error).toBe(true);
+    });
+  });
+
+  describe('loginUser', () => {
+    test('should authenticate user successfully', async () => {
+      const event = {
+        body: JSON.stringify({
+          idToken: 'valid-test-token'
+        }),
+        requestContext: { requestId: 'test-request-id' }
+      };
+
+      const result = await loginUser(event);
+      const body = JSON.parse(result.body);
+
+      expect(result.statusCode).toBe(200);
+      expect(body.success).toBe(true);
+      expect(body.data).toHaveProperty('token');
+    });
+  });
+});
+```
+
+#### 5.2 Local Testing Commands
+```bash
+# Run unit tests
+npm test
+
+# Run tests with coverage
+npm run test:coverage
+
+# Test individual function locally
+sam local invoke RegisterUserFunction -e events/register-event.json
+
+# Start local API for testing
+sam local start-api --env-vars env.json --port 3000
+
+# Test API endpoints locally
+curl -X POST http://localhost:3000/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"idToken":"test-token","userData":{"displayName":"Test User"}}'
+```
+
+#### 5.3 Create Test Events
+```json
+// events/register-event.json
+{
+  "httpMethod": "POST",
+  "path": "/auth/register",
+  "headers": {
+    "Content-Type": "application/json"
+  },
+  "body": "{\"idToken\":\"test-firebase-token\",\"userData\":{\"displayName\":\"John Doe\",\"preferences\":{\"notifications\":true}}}",
+  "requestContext": {
+    "requestId": "test-request-123"
+  }
+}
+```
+
+```json
+// events/login-event.json
+{
+  "httpMethod": "POST",
+  "path": "/auth/login",
+  "headers": {
+    "Content-Type": "application/json"
+  },
+  "body": "{\"idToken\":\"test-firebase-token\"}",
+  "requestContext": {
+    "requestId": "test-request-456"
+  }
+}
+```
+
+#### 5.4 Monitoring and Observability
+```bash
+# View CloudWatch logs
+sam logs -n RegisterUserFunction --stack-name ios-auth-backend-dev --tail
+
+# View X-Ray traces
+aws xray get-trace-summaries --time-range-type TimeRangeByStartTime \
+  --start-time 2024-01-01T00:00:00 --end-time 2024-01-02T00:00:00
+
+# Monitor API Gateway metrics
+aws cloudwatch get-metric-statistics \
+  --namespace AWS/ApiGateway \
+  --metric-name Count \
+  --dimensions Name=ApiName,Value=ios-auth-backend-AuthApi \
+  --start-time 2024-01-01T00:00:00Z \
+  --end-time 2024-01-02T00:00:00Z \
+  --period 3600 \
+  --statistics Sum
+```
+
+### Step 6: Production Deployment and Security
+
+#### 6.1 Environment-Specific Deployments
+```bash
+# Deploy to development
+sam deploy --config-env dev \
+  --parameter-overrides \
+    JWTSecret="dev-jwt-secret-minimum-32-characters" \
+    FirebaseProjectId="your-dev-firebase-project" \
+    FirebaseClientEmail="dev-service@project.iam.gserviceaccount.com" \
+    FirebasePrivateKey="$(cat dev-firebase-key.pem)"
+
+# Deploy to staging
+sam deploy --config-env staging \
+  --parameter-overrides \
+    JWTSecret="staging-jwt-secret-minimum-32-characters" \
+    FirebaseProjectId="your-staging-firebase-project" \
+    FirebaseClientEmail="staging-service@project.iam.gserviceaccount.com" \
+    FirebasePrivateKey="$(cat staging-firebase-key.pem)"
+
+# Deploy to production
+sam deploy --config-env prod \
+  --parameter-overrides \
+    JWTSecret="production-jwt-secret-minimum-32-characters" \
+    FirebaseProjectId="your-prod-firebase-project" \
+    FirebaseClientEmail="prod-service@project.iam.gserviceaccount.com" \
+    FirebasePrivateKey="$(cat prod-firebase-key.pem)"
+```
+
+#### 6.2 Security Best Practices Implementation
+```yaml
+# Add to template.yaml - Enhanced security configuration
+Resources:
+  # WAF for API Gateway
+  WebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub '${AWS::StackName}-waf'
+      Scope: REGIONAL
+      DefaultAction:
+        Allow: {}
+      Rules:
+        - Name: RateLimitRule
+          Priority: 1
+          Statement:
+            RateBasedStatement:
+              Limit: 2000
+              AggregateKeyType: IP
+          Action:
+            Block: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: RateLimitRule
+
+  # Associate WAF with API Gateway
+  WebACLAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    Properties:
+      ResourceArn: !Sub 'arn:aws:apigateway:${AWS::Region}::/restapis/${AuthApi}/stages/${Stage}'
+      WebACLArn: !GetAtt WebACL.Arn
+
+  # Enhanced API Gateway with security
+  AuthApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: !Ref Stage
+      TracingConfig:
+        TracingEnabled: true
+      AccessLogSetting:
+        DestinationArn: !GetAtt ApiGatewayLogGroup.Arn
+        Format: >
+          {
+            "requestId": "$context.requestId",
+            "ip": "$context.identity.sourceIp",
+            "caller": "$context.identity.caller",
+            "user": "$context.identity.user",
+            "requestTime": "$context.requestTime",
+            "httpMethod": "$context.httpMethod",
+            "resourcePath": "$context.resourcePath",
+            "status": "$context.status",
+            "protocol": "$context.protocol",
+            "responseLength": "$context.responseLength"
+          }
+      MethodSettings:
+        - ResourcePath: '/*'
+          HttpMethod: '*'
+          LoggingLevel: INFO
+          DataTraceEnabled: true
+          MetricsEnabled: true
+          ThrottlingBurstLimit: 500
+          ThrottlingRateLimit: 100
+
+  # Secrets Manager for sensitive configuration
+  FirebaseCredentials:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${AWS::StackName}-firebase-credentials'
+      Description: Firebase service account credentials
+      SecretString: !Sub |
+        {
+          "projectId": "${FirebaseProjectId}",
+          "clientEmail": "${FirebaseClientEmail}",
+          "privateKey": "${FirebasePrivateKey}"
+        }
+
+  JWTSecretStore:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${AWS::StackName}-jwt-secret'
+      Description: JWT signing secret
+      SecretString: !Ref JWTSecret
+```
+
+#### 6.3 Performance Optimization
+```javascript
+// Enhanced userFunctions.js with performance optimizations
+const AWS = require('aws-sdk');
+const admin = require('firebase-admin');
+
+// Connection pooling and reuse
+const dynamodb = new AWS.DynamoDB.DocumentClient({
+  region: process.env.AWS_REGION || 'us-east-1',
+  maxRetries: 3,
+  retryDelayOptions: {
+    customBackoff: function(retryCount) {
+      return Math.pow(2, retryCount) * 100;
+    }
+  },
+  httpOptions: {
+    connectTimeout: 3000,
+    timeout: 5000
+  }
+});
+
+// Initialize Firebase once outside handler
+let firebaseInitialized = false;
+const initializeFirebase = () => {
+  if (!firebaseInitialized && !admin.apps.length) {
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n')
+      })
+    });
+    firebaseInitialized = true;
+  }
+};
+
+// Optimized register function with caching
+exports.registerUser = async (event) => {
+  initializeFirebase();
+  
+  try {
+    logger.info('Register user request received', { 
+      requestId: event.requestContext?.requestId,
+      timestamp: Date.now()
+    });
+
+    const { idToken, userData } = JSON.parse(event.body);
+
+    // Verify Firebase token with error handling
+    let decodedToken;
+    try {
+      decodedToken = await admin.auth().verifyIdToken(idToken, true);
+    } catch (firebaseError) {
+      logger.error('Firebase token verification failed', { 
+        error: firebaseError.message,
+        requestId: event.requestContext?.requestId
+      });
+      return createResponse(401, {
+        error: true,
+        message: 'Invalid authentication token'
+      });
+    }
+
+    const { uid, email, name, picture } = decodedToken;
+
+    // Check for existing user efficiently
+    const existingUserCheck = await dynamodb.query({
+      TableName: USERS_TABLE,
+      IndexName: 'EmailIndex',
+      KeyConditionExpression: 'email = :email',
+      ExpressionAttributeValues: {
+        ':email': email
+      },
+      Limit: 1
+    }).promise();
+
+    if (existingUserCheck.Items && existingUserCheck.Items.length > 0) {
+      return createResponse(409, {
+        error: true,
+        message: 'User already exists'
+      });
+    }
+
+    // Create optimized user record
+    const userId = uuidv4();
+    const timestamp = new Date().toISOString();
+    
+    const userRecord = {
+      userId,
+      firebaseUid: uid,
+      email,
+      displayName: userData?.displayName || name || '',
+      profilePicture: userData?.profilePicture || picture || '',
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      lastLoginAt: timestamp,
+      isActive: true,
+      preferences: userData?.preferences || {},
+      // Add fields for performance tracking
+      loginCount: 1,
+      lastIpAddress: event.requestContext?.identity?.sourceIp || '',
+      userAgent: event.headers?.['User-Agent'] || ''
+    };
+
+    // Batch write for better performance
+    await dynamodb.put({
+      TableName: USERS_TABLE,
+      Item: userRecord,
+      ConditionExpression: 'attribute_not_exists(userId)'
+    }).promise();
+
+    // Generate JWT token
+    const jwtToken = jwt.sign(
+      { 
+        userId, 
+        email, 
+        firebaseUid: uid,
+        iat: Math.floor(Date.now() / 1000)
+      },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
+
+    logger.info('User registered successfully', { 
+      userId, 
+      email,
+      executionTime: Date.now() - (event.requestContext?.requestTimeEpoch || Date.now())
+    });
+
+    return createResponse(201, {
+      success: true,
+      message: 'User registered successfully',
+      data: {
+        userId,
+        email,
+        displayName: userRecord.displayName,
+        profilePicture: userRecord.profilePicture,
+        token: jwtToken,
+        expiresIn: JWT_EXPIRES_IN
+      }
+    });
+
+  } catch (error) {
+    logger.error('Registration failed', { 
+      error: error.message, 
+      stack: error.stack,
+      requestId: event.requestContext?.requestId
+    });
+    
+    if (error.code === 'ConditionalCheckFailedException') {
+      return createResponse(409, {
+        error: true,
+        message: 'User already exists'
+      });
+    }
+
+    return createResponse(500, {
+      error: true,
+      message: 'Internal server error'
+    });
+  }
+};
 ```
 
 #### 2.2 Create Sessions Table

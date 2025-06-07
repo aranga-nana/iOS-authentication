@@ -1,4 +1,5 @@
 # Terraform Configuration for iOS Authentication System
+# Supporting infrastructure that complements the SAM-deployed Lambda functions
 
 terraform {
   required_version = ">= 1.0"
@@ -39,66 +40,101 @@ provider "aws" {
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
 
-# Random password for JWT secret
-resource "random_password" "jwt_secret" {
-  length  = 64
-  special = true
+# Data source to reference SAM stack outputs
+data "aws_cloudformation_stack" "sam_stack" {
+  name = var.sam_stack_name
 }
 
 # Local values for resource naming
 locals {
   common_name = "${var.project_name}-${var.environment}"
   
+  # SAM stack outputs
+  api_gateway_id = data.aws_cloudformation_stack.sam_stack.outputs["AuthApiId"]
+  users_table_name = data.aws_cloudformation_stack.sam_stack.outputs["UsersTableName"]
+  users_table_arn = data.aws_cloudformation_stack.sam_stack.outputs["UsersTableArn"]
+  
   common_tags = {
     Project     = var.project_name
     Environment = var.environment
     ManagedBy   = "terraform"
     Owner       = var.owner
+    SAMIntegration = "true"
   }
 }
 
-# DynamoDB Table for Users
-module "dynamodb" {
-  source = "./modules/dynamodb"
-  
-  project_name = var.project_name
-  environment  = var.environment
-  
-  tables = {
-    users = {
-      hash_key = "userId"
-      attributes = [
-        {
-          name = "userId"
-          type = "S"
-        },
-        {
-          name = "email"
-          type = "S"
-        }
-      ]
-      global_secondary_indexes = [
-        {
-          name     = "EmailIndex"
-          hash_key = "email"
-        }
-      ]
-    }
-  }
+# Secrets Manager for Firebase credentials
+resource "aws_secretsmanager_secret" "firebase_credentials" {
+  name        = "${local.common_name}-firebase-credentials"
+  description = "Firebase service account credentials for iOS authentication"
   
   tags = local.common_tags
 }
 
-# Lambda Functions
-module "lambda" {
-  source = "./modules/lambda"
+resource "aws_secretsmanager_secret_version" "firebase_credentials" {
+  secret_id = aws_secretsmanager_secret.firebase_credentials.id
+  secret_string = jsonencode({
+    project_id   = var.firebase_project_id
+    client_email = var.firebase_client_email
+    private_key  = var.firebase_private_key
+  })
+}
+
+# JWT Secret in Secrets Manager
+resource "aws_secretsmanager_secret" "jwt_secret" {
+  name        = "${local.common_name}-jwt-secret"
+  description = "JWT secret key for token signing"
   
-  project_name = var.project_name
-  environment  = var.environment
+  tags = local.common_tags
+}
+
+resource "random_password" "jwt_secret" {
+  length  = 64
+  special = true
+}
+
+resource "aws_secretsmanager_secret_version" "jwt_secret" {
+  secret_id     = aws_secretsmanager_secret.jwt_secret.id
+  secret_string = random_password.jwt_secret.result
+}
+
+# WAF for API Protection
+module "waf" {
+  source = "./modules/security"
   
-  # Lambda configuration
-  runtime     = "nodejs18.x"
-  timeout     = 30
+  project_name     = var.project_name
+  environment      = var.environment
+  api_gateway_arn  = "arn:aws:apigateway:${data.aws_region.current.name}::/restapis/${local.api_gateway_id}/stages/*"
+  
+  tags = local.common_tags
+}
+
+# CloudFront Distribution for API
+module "cloudfront" {
+  source = "./modules/cloudfront"
+  
+  project_name       = var.project_name
+  environment        = var.environment
+  api_gateway_id     = local.api_gateway_id
+  api_gateway_domain = "${local.api_gateway_id}.execute-api.${data.aws_region.current.name}.amazonaws.com"
+  
+  tags = local.common_tags
+}
+
+# Enhanced CloudWatch Monitoring
+module "monitoring" {
+  source = "./modules/monitoring"
+  
+  project_name     = var.project_name
+  environment      = var.environment
+  api_gateway_id   = local.api_gateway_id
+  users_table_name = local.users_table_name
+  
+  # SNS topic for alerts
+  alert_email = var.alert_email
+  
+  tags = local.common_tags
+}
   memory_size = 512
   
   # Environment variables

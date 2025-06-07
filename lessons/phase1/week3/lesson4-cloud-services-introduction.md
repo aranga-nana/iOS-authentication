@@ -226,19 +226,20 @@ exports.verifyToken = async (event, context) => {
 
 ### 2.3 API Gateway Configuration
 
-**API Gateway Setup:**
+**API Gateway Setup with AWS SAM (Recommended):**
 ```yaml
-# serverless.yml
-service: ios-auth-api
+# template.yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
 
-provider:
-  name: aws
-  runtime: nodejs18.x
-  region: us-east-1
-  environment:
-    FIREBASE_PROJECT_ID: ${env:FIREBASE_PROJECT_ID}
-    FIREBASE_PRIVATE_KEY: ${env:FIREBASE_PRIVATE_KEY}
-    FIREBASE_CLIENT_EMAIL: ${env:FIREBASE_CLIENT_EMAIL}
+Globals:
+  Function:
+    Runtime: nodejs18.x
+    Environment:
+      Variables:
+        FIREBASE_PROJECT_ID: !Ref FirebaseProjectId
+        FIREBASE_PRIVATE_KEY: !Ref FirebasePrivateKey
+        FIREBASE_CLIENT_EMAIL: !Ref FirebaseClientEmail
 
 functions:
   verifyToken:
@@ -308,6 +309,18 @@ const userProfile = {
 Create a simple Lambda function that returns user information:
 
 ```bash
+# Option 1: AWS SAM (Recommended for AWS-native development)
+# Install AWS SAM CLI
+brew install aws-sam-cli
+
+# Create new SAM application
+sam init --runtime nodejs18.x --name auth-service --app-template hello-world
+cd auth-service
+
+# Deploy to AWS
+sam deploy --guided
+
+# Option 2: Serverless Framework (Multi-cloud alternative)
 # Install Serverless Framework
 npm install -g serverless
 

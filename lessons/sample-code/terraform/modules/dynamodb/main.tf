@@ -1,8 +1,15 @@
 # DynamoDB Module for iOS Authentication System
+# NOTE: Core DynamoDB tables are now managed by AWS SAM
+# This module provides additional DynamoDB configurations and monitoring
 
-# DynamoDB Tables
-resource "aws_dynamodb_table" "tables" {
-  for_each = var.tables
+# Data source to reference SAM-deployed DynamoDB table
+data "aws_dynamodb_table" "sam_users_table" {
+  name = var.sam_users_table_name
+}
+
+# Additional DynamoDB tables for extended functionality (if needed)
+resource "aws_dynamodb_table" "additional_tables" {
+  for_each = var.additional_tables
   
   name           = "${var.project_name}-${each.key}-${var.environment}"
   billing_mode   = var.billing_mode
@@ -21,10 +28,6 @@ resource "aws_dynamodb_table" "tables" {
       type = attribute.value.type
     }
   }
-  
-  # Global Secondary Indexes
-  dynamic "global_secondary_index" {
-    for_each = lookup(each.value, "global_secondary_indexes", [])
     content {
       name            = global_secondary_index.value.name
       hash_key        = global_secondary_index.value.hash_key

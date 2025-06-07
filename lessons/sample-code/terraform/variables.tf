@@ -1,4 +1,5 @@
 # Variables for iOS Authentication System Terraform Configuration
+# Supporting infrastructure that complements SAM-deployed Lambda functions
 
 # Project Configuration
 variable "project_name" {
@@ -22,6 +23,13 @@ variable "owner" {
   default     = "ios-auth-team"
 }
 
+# SAM Integration
+variable "sam_stack_name" {
+  description = "Name of the SAM CloudFormation stack"
+  type        = string
+  default     = "ios-auth-backend-dev"
+}
+
 # AWS Configuration
 variable "aws_region" {
   description = "AWS region for resources"
@@ -29,7 +37,7 @@ variable "aws_region" {
   default     = "us-east-1"
 }
 
-# Firebase Configuration
+# Firebase Configuration (stored in Secrets Manager)
 variable "firebase_project_id" {
   description = "Firebase project ID"
   type        = string
@@ -48,7 +56,26 @@ variable "firebase_private_key" {
   sensitive   = true
 }
 
-# JWT Configuration
+# Monitoring Configuration
+variable "alert_email" {
+  description = "Email address for CloudWatch alerts"
+  type        = string
+}
+
+# Domain Configuration (optional)
+variable "domain_name" {
+  description = "Custom domain name for API (optional)"
+  type        = string
+  default     = ""
+}
+
+variable "certificate_arn" {
+  description = "ARN of SSL certificate for custom domain (optional)"
+  type        = string
+  default     = ""
+}
+
+# WAF Configuration
 variable "jwt_expires_in" {
   description = "JWT token expiration time"
   type        = string

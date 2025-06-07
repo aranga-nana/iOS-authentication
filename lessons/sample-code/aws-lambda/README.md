@@ -1,6 +1,6 @@
 # AWS Lambda Functions for iOS Authentication
 
-This directory contains the AWS Lambda functions that power the backend authentication system for the iOS app.
+This directory contains the AWS Lambda functions that power the backend authentication system for the iOS app, built with AWS SAM (Serverless Application Model).
 
 ## Features
 
@@ -9,8 +9,10 @@ This directory contains the AWS Lambda functions that power the backend authenti
 - **Profile Management**: Get, update, and delete user profiles
 - **Security**: JWT token validation, rate limiting, input validation
 - **Error Handling**: Comprehensive error handling with structured responses
-- **Logging**: Structured logging with Winston
+- **Logging**: Structured logging with Winston and CloudWatch
 - **Testing**: Complete test suite with Jest
+- **Infrastructure as Code**: AWS SAM template for easy deployment
+- **Local Development**: SAM CLI support for local testing
 
 ## Architecture
 
@@ -27,6 +29,16 @@ This directory contains the AWS Lambda functions that power the backend authenti
                                           │ Firebase Admin  │
                                           └─────────────────┘
 ```
+
+## SAM Template Overview
+
+The `template.yaml` file defines the complete serverless infrastructure:
+
+- **5 Lambda Functions**: User registration, login, profile management
+- **API Gateway**: RESTful API with CORS support and request tracing
+- **DynamoDB Table**: User data storage with GSI for email lookups
+- **CloudWatch Logs**: Centralized logging with retention policies
+- **Application Insights**: Monitoring and observability
 
 ## Functions
 
@@ -61,35 +73,66 @@ This directory contains the AWS Lambda functions that power the backend authenti
 
 ### Prerequisites
 - Node.js 18+
-- AWS CLI configured
-- Serverless Framework
+- AWS CLI configured with appropriate permissions
+- AWS SAM CLI installed
 - Firebase project with Admin SDK
 
 ### Installation
 
-1. Install dependencies:
+1. Install AWS SAM CLI:
+```bash
+# macOS
+brew install aws-sam-cli
+
+# Windows
+choco install aws-sam-cli
+
+# Linux
+pip install aws-sam-cli
+```
+
+2. Install dependencies:
 ```bash
 npm install
 ```
 
-2. Configure environment variables:
+3. Configure environment variables for local development:
 ```bash
-cp .env.example .env
-# Edit .env with your actual values
+cp env.json.example env.json
+# Edit env.json with your actual values
 ```
 
-3. Configure Firebase Admin SDK:
+4. Configure Firebase Admin SDK:
    - Download service account key from Firebase Console
    - Add credentials to environment variables
 
 ### Local Development
 
-Run functions locally with Serverless Offline:
+Run functions locally with SAM CLI:
 ```bash
+# Start local API Gateway
 npm run local
+
+# Or use SAM directly
+sam local start-api --env-vars env.json
 ```
 
-The API will be available at `http://localhost:3001`
+The API will be available at `http://localhost:3000`
+
+For local DynamoDB, you can use DynamoDB Local:
+```bash
+# Install DynamoDB Local
+docker run -p 8000:8000 amazon/dynamodb-local
+
+# Create local table
+aws dynamodb create-table \
+  --table-name ios-auth-backend-users-local \
+  --attribute-definitions AttributeName=userId,AttributeType=S AttributeName=email,AttributeType=S \
+  --key-schema AttributeName=userId,KeyType=HASH \
+  --billing-mode PAY_PER_REQUEST \
+  --global-secondary-indexes IndexName=EmailIndex,KeySchema=[{AttributeName=email,KeyType=HASH}],Projection={ProjectionType=ALL} \
+  --endpoint-url http://localhost:8000
+```
 
 ### Testing
 
@@ -105,13 +148,47 @@ npm test -- --coverage
 
 ### Deployment
 
-Deploy to AWS:
+Deploy to AWS using SAM:
 ```bash
+# Build the application
+npm run build-sam
+
 # Deploy to development
-serverless deploy
+sam deploy --config-env dev
+
+# Deploy to staging
+sam deploy --config-env staging
 
 # Deploy to production
-serverless deploy --stage prod
+sam deploy --config-env prod
+```
+
+Alternatively, use npm scripts:
+```bash
+# Build and validate
+npm run build
+npm run validate
+
+# Deploy
+npm run deploy
+```
+
+### Managing Parameters
+
+For sensitive parameters like JWT secrets and Firebase keys, use AWS Systems Manager Parameter Store or AWS Secrets Manager:
+
+```bash
+# Store JWT secret
+aws ssm put-parameter \
+  --name "/ios-auth-backend/dev/jwt-secret" \
+  --value "your-super-secret-key" \
+  --type "SecureString"
+
+# Store Firebase private key
+aws ssm put-parameter \
+  --name "/ios-auth-backend/dev/firebase-private-key" \
+  --value "$(cat firebase-service-account-key.json | jq -r .private_key)" \
+  --type "SecureString"
 ```
 
 ## API Endpoints
@@ -204,19 +281,133 @@ serverless deploy --stage prod
 - Encryption at rest
 - Global secondary index for email lookups
 
-## Monitoring
+## Monitoring and Observability
+
+### Application Insights
+AWS Application Insights is automatically configured to provide:
+- Application topology visualization
+- Performance monitoring dashboards
+- Automated anomaly detection
+- Custom CloudWatch dashboards
 
 ### CloudWatch Metrics
-- Function duration
-- Error rates
-- Invocation counts
-- DynamoDB metrics
+SAM automatically creates CloudWatch metrics for:
+- Function duration and invocations
+- API Gateway request/response metrics
+- Error rates and cold starts
+- DynamoDB read/write metrics
+
+### X-Ray Tracing
+Distributed tracing is enabled by default:
+- End-to-end request tracing
+- Service map visualization
+- Performance bottleneck identification
+- Error root cause analysis
 
 ### Logging
-- Structured JSON logs
+- Structured JSON logs with correlation IDs
 - Request/response correlation
 - Performance timing
-- Error stack traces
+- Centralized log aggregation with CloudWatch Logs
+
+### Alarms and Notifications
+Configure CloudWatch alarms for:
+```bash
+# Create high error rate alarm
+aws cloudwatch put-metric-alarm \
+  --alarm-name "ios-auth-high-error-rate" \
+  --alarm-description "High error rate in authentication API" \
+  --metric-name "4XXError" \
+  --namespace "AWS/ApiGateway" \
+  --statistic "Sum" \
+  --period 300 \
+  --threshold 10 \
+  --comparison-operator "GreaterThanThreshold"
+```
+
+## SAM CLI Commands
+
+### Development Workflow
+```bash
+# Validate template
+sam validate
+
+# Build application
+sam build --cached --parallel
+
+# Test locally
+sam local start-api --env-vars env.json --port 3000
+
+# Invoke specific function locally
+sam local invoke RegisterUserFunction --event events/register-event.json
+
+# Generate sample events
+sam local generate-event apigateway aws-proxy --path /auth/register --method POST
+
+# Test with hot reloading
+sam sync --stack-name ios-auth-backend-dev --watch
+```
+
+### Deployment Commands
+```bash
+# Guided deployment (first time)
+sam deploy --guided
+
+# Deploy with specific configuration
+sam deploy --config-env dev --parameter-overrides "JWTSecret=your-secret"
+
+# Deploy with capabilities
+sam deploy --capabilities CAPABILITY_IAM
+
+# Deploy and skip confirmation
+sam deploy --no-confirm-changeset
+```
+
+### Troubleshooting
+```bash
+# View logs
+sam logs --stack-name ios-auth-backend-dev --tail
+
+# View specific function logs
+sam logs --name RegisterUserFunction --stack-name ios-auth-backend-dev --tail
+
+# Debug locally
+sam local start-api --debug-port 5858 --env-vars env.json
+```
+
+## Performance Optimizations
+
+### AWS Lambda Best Practices
+- **Connection Reuse**: DynamoDB DocumentClient initialized outside handler
+- **Reserved Concurrency**: Function-specific limits to prevent resource exhaustion
+- **Memory Optimization**: 512MB provides optimal price/performance
+- **Cold Start Mitigation**: Keep functions warm with CloudWatch Events
+
+### DynamoDB Optimizations
+- **On-Demand Billing**: Automatic scaling without capacity planning
+- **Point-in-Time Recovery**: Data protection without performance impact
+- **Encryption at Rest**: Security without additional latency
+- **GSI Design**: Email index for efficient user lookups
+
+### API Gateway Features
+- **Request Validation**: Schema validation at gateway level
+- **Caching**: Response caching for frequently accessed data
+- **Throttling**: Built-in rate limiting protection
+- **CORS**: Automated CORS header management
+
+## Security Best Practices
+
+### Infrastructure Security
+- **IAM Principle of Least Privilege**: Function-specific permissions
+- **VPC Configuration**: Optional VPC deployment for enhanced isolation
+- **Resource-Based Policies**: Fine-grained access control
+- **Encryption**: Data encrypted in transit and at rest
+
+### Application Security
+- **Input Validation**: Multi-layer validation (API Gateway + Lambda)
+- **Token Verification**: Firebase and JWT token validation
+- **Rate Limiting**: IP-based and user-based limits
+- **CORS Configuration**: Strict origin policies
 
 ## Environment Variables
 
@@ -245,7 +436,7 @@ serverless deploy --stage prod
    - Check AWS region settings
 
 3. **CORS Errors**
-   - Verify CORS configuration in serverless.yml
+   - Verify CORS configuration in template.yaml
    - Check request headers
    - Test with Postman/curl first
 
@@ -253,16 +444,16 @@ serverless deploy --stage prod
 
 ```bash
 # View CloudWatch logs
-serverless logs -f registerUser -t
+sam logs -n RegisterUser --stack-name ios-auth-backend-dev -t
 
 # Test function locally
-serverless invoke local -f registerUser -p test-event.json
+sam local invoke RegisterUser -e test-event.json
 
 # Check DynamoDB table
 aws dynamodb scan --table-name ios-auth-users-dev
 
 # Validate deployment
-serverless info
+sam list endpoints --stack-name ios-auth-backend-dev
 ```
 
 ## Development Guidelines

@@ -1,34 +1,34 @@
 # API Gateway Module for iOS Authentication System
+# NOTE: Core API Gateway resources are now managed by AWS SAM
+# This module provides additional configurations and integrations
 
-# REST API
-resource "aws_api_gateway_rest_api" "main" {
-  name        = "${var.project_name}-${var.environment}-api"
-  description = "iOS Authentication API for ${var.environment}"
+# Data source to reference SAM-deployed API Gateway
+data "aws_api_gateway_rest_api" "sam_api" {
+  name = var.sam_api_name
+}
+
+# Custom domain name for API Gateway (if needed)
+resource "aws_api_gateway_domain_name" "custom_domain" {
+  count = var.custom_domain_name != null ? 1 : 0
+  
+  domain_name              = var.custom_domain_name
+  regional_certificate_arn = var.certificate_arn
   
   endpoint_configuration {
     types = ["REGIONAL"]
   }
   
-  binary_media_types = ["*/*"]
-  
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Principal = "*"
-        Action = "execute-api:Invoke"
-        Resource = "*"
-        Condition = {
-          IpAddress = {
-            "aws:SourceIp" = var.allowed_source_ips
-          }
-        }
-      }
-    ]
-  })
-  
   tags = var.tags
+}
+
+# Base path mapping for custom domain
+resource "aws_api_gateway_base_path_mapping" "custom_domain" {
+  count = var.custom_domain_name != null ? 1 : 0
+  
+  api_id      = data.aws_api_gateway_rest_api.sam_api.id
+  stage_name  = var.stage_name
+  domain_name = aws_api_gateway_domain_name.custom_domain[0].domain_name
+}
 }
 
 # API Gateway Deployment

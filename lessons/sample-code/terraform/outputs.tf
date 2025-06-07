@@ -1,54 +1,62 @@
 # Outputs for iOS Authentication System
+# Supporting infrastructure that complements SAM-deployed resources
 
-# API Gateway Outputs
-output "api_gateway_url" {
-  description = "API Gateway invoke URL"
-  value       = module.api_gateway.api_url
+# SAM Stack References
+output "sam_stack_name" {
+  description = "Name of the SAM CloudFormation stack"
+  value       = var.sam_stack_name
 }
 
-output "api_gateway_id" {
-  description = "API Gateway ID"
-  value       = module.api_gateway.api_id
+output "sam_api_gateway_id" {
+  description = "API Gateway ID from SAM stack"
+  value       = local.api_gateway_id
 }
 
-output "api_gateway_stage" {
-  description = "API Gateway deployment stage"
-  value       = module.api_gateway.stage_name
+output "sam_users_table_name" {
+  description = "DynamoDB Users table name from SAM stack"
+  value       = local.users_table_name
 }
 
-output "api_custom_domain" {
-  description = "Custom domain for API (if configured)"
-  value       = var.api_domain_name
+# CloudFront Distribution
+output "cloudfront_distribution_id" {
+  description = "CloudFront distribution ID"
+  value       = module.cloudfront.distribution_id
 }
 
-# Lambda Function Outputs
-output "lambda_function_names" {
-  description = "Names of Lambda functions"
-  value       = module.lambda.function_names
+output "cloudfront_domain_name" {
+  description = "CloudFront distribution domain name"
+  value       = module.cloudfront.domain_name
 }
 
-output "lambda_function_arns" {
-  description = "ARNs of Lambda functions"
-  value       = module.lambda.function_arns
+output "cloudfront_hosted_zone_id" {
+  description = "CloudFront distribution hosted zone ID"
+  value       = module.cloudfront.hosted_zone_id
+}
+
+# WAF
+output "waf_web_acl_arn" {
+  description = "WAF Web ACL ARN"
+  value       = module.waf.web_acl_arn
+}
+
+# Secrets Manager
+output "firebase_credentials_secret_arn" {
+  description = "ARN of Firebase credentials secret"
+  value       = aws_secretsmanager_secret.firebase_credentials.arn
   sensitive   = true
 }
 
-# DynamoDB Outputs
-output "dynamodb_table_names" {
-  description = "Names of DynamoDB tables"
-  value       = module.dynamodb.table_names
-}
-
-output "dynamodb_table_arns" {
-  description = "ARNs of DynamoDB tables"
-  value       = module.dynamodb.table_arns
+output "jwt_secret_arn" {
+  description = "ARN of JWT secret"
+  value       = aws_secretsmanager_secret.jwt_secret.arn
   sensitive   = true
 }
 
-# CloudWatch Outputs
+# CloudWatch Monitoring
 output "cloudwatch_dashboard_url" {
   description = "CloudWatch dashboard URL"
   value       = module.monitoring.dashboard_url
+}
 }
 
 output "cloudwatch_log_groups" {
