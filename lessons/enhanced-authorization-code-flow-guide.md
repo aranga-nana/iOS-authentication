@@ -8,7 +8,7 @@
 This guide provides a comprehensive explanation of the OAuth 2.0 Authorization Code Flow, specifically focusing on:
 - **Step-by-step flow analysis** with real sample code
 - **Redirect URLs**: What they are, how they work, and iOS implementation
-- **Practical iOS implementation** with complete code examples
+- **Practical SwiftUI implementation** with complete code examples compatible with iOS 16.6+ and Swift 6
 - **Security considerations** and best practices
 
 ---
@@ -41,11 +41,11 @@ Let's break down each step with the actual sample code and explain what happens:
 #### Step 1: User Initiates Authentication
 
 ```swift
-// User taps "Sign in with Google" button
-@IBAction func signInWithGoogleTapped(_ sender: UIButton) {
+// User taps "Sign in with Google" button in SwiftUI
+Button("Sign in with Google") {
     // This is where our flow begins
-    oauthManager.authenticate { result in
-        // Handle result
+    Task {
+        try await oauthManager.authenticate()
     }
 }
 ```
@@ -295,7 +295,7 @@ struct RedirectURLSecurity {
 ```swift
 import Foundation
 import AuthenticationServices
-import UIKit
+import SwiftUI
 import CryptoKit // Required for PKCE implementation in Swift 6
 
 // MARK: - Enhanced OAuth Configuration
@@ -944,11 +944,21 @@ class EnhancedOAuthManager: NSObject, ObservableObject {
 
 // MARK: - ASWebAuthenticationPresentationContextProviding
 extension EnhancedOAuthManager: ASWebAuthenticationPresentationContextProviding {
+    /// Provides the presentation anchor for the web authentication session
+    /// 
+    /// In SwiftUI apps, we can use a simpler approach than the UIKit method.
+    /// ASPresentationAnchor() automatically finds the appropriate window.
+    /// 
+    /// For more advanced scenarios where you need a specific window,
+    /// you can access the current scene through @Environment(\.scenePhase)
+    /// or use NSApplication.shared.keyWindow on macOS.
+    /// 
+    /// - Parameter session: The authentication session requesting a presentation anchor
+    /// - Returns: The window that should present the authentication session
     func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
-        return UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap { $0.windows }
-            .first { $0.isKeyWindow } ?? ASPresentationAnchor()
+        // For SwiftUI apps, this simple approach works well
+        // ASPresentationAnchor() automatically finds the key window
+        return ASPresentationAnchor()
     }
 }
 
@@ -1281,29 +1291,47 @@ struct ContentView: View {
     }
 }
 
+/// Login view that presents the OAuth authentication interface
+/// 
+/// This view demonstrates:
+/// - Modern async/await usage for clean asynchronous code
+/// - Loading state management with button state changes
+/// - Error handling in async context
+/// - Accessible UI with proper button states
 struct LoginView: View {
+    /// Observed OAuth manager - changes will trigger UI updates
     @ObservedObject var oauthManager: EnhancedOAuthManager
     
     var body: some View {
         VStack(spacing: 20) {
+            // Welcome header
             Text("Welcome")
                 .font(.largeTitle)
                 .fontWeight(.bold)
             
+            // Authentication button with loading state
             Button(action: {
+                // Use Task for modern Swift concurrency (iOS 15.0+)
                 Task {
                     do {
+                        // Attempt authentication using async/await
                         let user = try await oauthManager.authenticate()
-                        print("✅ Authentication successful: \(user)")
+                        print("✅ Authentication successful for user: \(user.userInfo?.name ?? "Unknown")")
+                    } catch OAuthError.userCanceled {
+                        // User canceled - this is normal, don't show error
+                        print("ℹ️ User canceled authentication")
                     } catch {
-                        print("❌ Authentication failed: \(error)")
+                        // Other errors - these should be handled/displayed
+                        print("❌ Authentication failed: \(error.localizedDescription)")
                     }
                 }
             }) {
                 HStack {
+                    // Show loading indicator when authentication is in progress
                     if oauthManager.isLoading {
                         ProgressView()
                             .scaleEffect(0.8)
+                            .tint(.white)  // iOS 16+ tint modifier
                     } else {
                         Image(systemName: "person.circle.fill")
                     }
@@ -1315,8 +1343,9 @@ struct LoginView: View {
                 .foregroundColor(.white)
                 .cornerRadius(10)
             }
-            .disabled(oauthManager.isLoading)
+            .disabled(oauthManager.isLoading)  // Prevent multiple simultaneous attempts
             
+            // Loading status text
             if oauthManager.isLoading {
                 Text("Authenticating...")
                     .font(.caption)
